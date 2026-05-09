@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -33,15 +34,21 @@ type AliVideoRequest struct {
 	Parameters *AliVideoParameters `json:"parameters,omitempty"`
 }
 
-// AliVideoInput 视频输入参数
+type AliVideoMedia struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+// AliVideoInput represents the DashScope video-generation input object.
 type AliVideoInput struct {
-	Prompt         string `json:"prompt,omitempty"`          // 文本提示词
-	ImgURL         string `json:"img_url,omitempty"`         // 首帧图像URL或Base64（图生视频）
-	FirstFrameURL  string `json:"first_frame_url,omitempty"` // 首帧图片URL（首尾帧生视频）
-	LastFrameURL   string `json:"last_frame_url,omitempty"`  // 尾帧图片URL（首尾帧生视频）
-	AudioURL       string `json:"audio_url,omitempty"`       // 音频URL（wan2.5支持）
-	NegativePrompt string `json:"negative_prompt,omitempty"` // 反向提示词
-	Template       string `json:"template,omitempty"`        // 视频特效模板
+	Prompt         string          `json:"prompt,omitempty"`
+	ImgURL         string          `json:"img_url,omitempty"`
+	Media          []AliVideoMedia `json:"media,omitempty"`
+	FirstFrameURL  string          `json:"first_frame_url,omitempty"`
+	LastFrameURL   string          `json:"last_frame_url,omitempty"`
+	AudioURL       string          `json:"audio_url,omitempty"`
+	NegativePrompt string          `json:"negative_prompt,omitempty"`
+	Template       string          `json:"template,omitempty"`
 }
 
 // AliVideoParameters 视频参数
@@ -123,7 +130,21 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
 	// ValidateMultipartDirect 负责解析并将原始 TaskSubmitReq 存入 context
-	return relaycommon.ValidateMultipartDirect(c, info)
+	if taskErr := relaycommon.ValidateMultipartDirect(c, info); taskErr != nil {
+		return taskErr
+	}
+
+	taskReq, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil
+	}
+
+	if strings.HasPrefix(taskReq.Model, "vidu/") && strings.Contains(taskReq.Model, "_start-end2video") {
+		info.Action = constant.TaskActionFirstTailGenerate
+	} else if strings.HasPrefix(taskReq.Model, "vidu/") && strings.Contains(taskReq.Model, "_reference2video") {
+		info.Action = constant.TaskActionReferenceGenerate
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
@@ -177,6 +198,13 @@ var (
 		"1632*1248",
 		"1248*1632",
 	}
+	size540p = []string{
+		"1024*576",
+		"576*1024",
+		"1024*1024",
+		"1024*768",
+		"768*1024",
+	}
 )
 
 func sizeToResolution(size string) (string, error) {
@@ -186,13 +214,124 @@ func sizeToResolution(size string) (string, error) {
 		return "720P", nil
 	} else if lo.Contains(size1080p, size) {
 		return "1080P", nil
+	} else if lo.Contains(size540p, size) {
+		return "540P", nil
 	}
 	return "", fmt.Errorf("invalid size: %s", size)
+}
+
+func isAliViduImageModel(model string) bool {
+	return strings.HasPrefix(model, "vidu/") &&
+		(strings.Contains(model, "_img2video") ||
+			strings.Contains(model, "_start-end2video") ||
+			strings.Contains(model, "_reference2video"))
+}
+
+func isAliViduStartEndModel(model string) bool {
+	return strings.HasPrefix(model, "vidu/") && strings.Contains(model, "_start-end2video")
+}
+
+func collectImageInputs(req relaycommon.TaskSubmitReq) []string {
+	seen := make(map[string]bool)
+	images := make([]string, 0, len(req.Images)+2)
+	add := func(url string) {
+		url = strings.TrimSpace(url)
+		if url == "" || seen[url] {
+			return
+		}
+		seen[url] = true
+		images = append(images, url)
+	}
+	for _, image := range req.Images {
+		add(image)
+	}
+	add(req.Image)
+	add(req.InputReference)
+	return images
+}
+
+func firstImageInput(req relaycommon.TaskSubmitReq) string {
+	images := collectImageInputs(req)
+	if len(images) == 0 {
+		return ""
+	}
+	return images[0]
 }
 
 func ProcessAliOtherRatios(aliReq *AliVideoRequest) (map[string]float64, error) {
 	otherRatios := make(map[string]float64)
 	aliRatios := map[string]map[string]float64{
+		// vidu文生视频
+		"vidu/viduq3-pro_text2video": {
+			"540P":  0.4,
+			"720P":  1,
+			"1080P": 1.2,
+		},
+		"vidu/viduq3-turbo_text2video": {
+			"540P":  0.666667,
+			"720P":  1,
+			"1080P": 1.166667,
+		},
+		"vidu/viduq2_text2video": {
+			"540P":  0.514286,
+			"720P":  1,
+			"1080P": 1.714286,
+		},
+		// vidu图生视频
+		"vidu/viduq3-pro_img2video": {
+			"540P":  0.4,
+			"720P":  1,
+			"1080P": 1.2,
+		},
+		"vidu/viduq3-turbo_img2video": {
+			"540P":  0.666667,
+			"720P":  1,
+			"1080P": 1.166667,
+		},
+		"vidu/viduq2-pro_img2video": {
+			"540P":  0.454545,
+			"720P":  1,
+			"1080P": 2.090909,
+		},
+		"vidu/viduq2-turbo_img2video": {
+			"540P":  0.35,
+			"720P":  1,
+			"1080P": 1.875,
+		},
+		"vidu/viduq2-pro-fast_img2video": {
+			"720P":  1,
+			"1080P": 2,
+		},
+		// vidu first-last-frame video
+		"vidu/viduq3-pro_start-end2video": {
+			"540P":  0.4,
+			"720P":  1,
+			"1080P": 1.2,
+		},
+		"vidu/viduq3-turbo_start-end2video": {
+			"540P":  0.666667,
+			"720P":  1,
+			"1080P": 1.166667,
+		},
+		"vidu/viduq2-pro_start-end2video": {
+			"540P":  0.454545,
+			"720P":  1,
+			"1080P": 2.090909,
+		},
+		"vidu/viduq2-turbo_start-end2video": {
+			"540P":  0.35,
+			"720P":  1,
+			"1080P": 1.875,
+		},
+		// 万相模型
+		"wan2.7-t2v": {
+			"720P":  1,
+			"1080P": 1 / 0.6,
+		},
+		"wan2.6-t2v": {
+			"720P":  1,
+			"1080P": 1 / 0.6,
+		},
 		"wan2.6-i2v": {
 			"720P":  1,
 			"1080P": 1 / 0.6,
@@ -261,15 +400,34 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 		Model: upstreamModel,
 		Input: AliVideoInput{
 			Prompt: req.Prompt,
-			ImgURL: req.InputReference,
+			ImgURL: firstImageInput(req),
 		},
 		Parameters: &AliVideoParameters{
-			PromptExtend: true, // 默认开启智能改写
 			Watermark:    false,
+			PromptExtend: true,
 		},
 	}
 
-	// 处理分辨率映射
+	if isAliViduImageModel(upstreamModel) {
+		images := collectImageInputs(req)
+		if len(images) == 0 {
+			return nil, fmt.Errorf("vidu image video model requires image, images, or input_reference")
+		}
+		if isAliViduStartEndModel(upstreamModel) && len(images) != 2 {
+			return nil, fmt.Errorf("vidu start-end video model requires exactly two images")
+		}
+		aliReq.Parameters.PromptExtend = false
+		aliReq.Input.ImgURL = ""
+		aliReq.Input.Media = make([]AliVideoMedia, 0, len(images))
+		for _, image := range images {
+			aliReq.Input.Media = append(aliReq.Input.Media, AliVideoMedia{
+				Type: "image",
+				URL:  image,
+			})
+		}
+	}
+
+	// Handle resolution and size mapping.
 	if req.Size != "" {
 		// text to video size must be contained *
 		if strings.Contains(req.Model, "t2v") && !strings.Contains(req.Size, "*") {
@@ -279,7 +437,6 @@ func (a *TaskAdaptor) convertToAliRequest(info *relaycommon.RelayInfo, req relay
 			aliReq.Parameters.Size = req.Size
 		} else {
 			resolution := strings.ToUpper(req.Size)
-			// 支持 480p, 720p, 1080p 或 480P, 720P, 1080P
 			if !strings.HasSuffix(resolution, "P") {
 				resolution = resolution + "P"
 			}

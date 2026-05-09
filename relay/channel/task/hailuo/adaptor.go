@@ -37,7 +37,25 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
-	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate)
+	if taskErr := relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionTextGenerate); taskErr != nil {
+		return taskErr
+	}
+
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil
+	}
+	switch len(collectImageInputs(req)) {
+	case 0:
+		info.Action = constant.TaskActionTextGenerate
+	case 1:
+		info.Action = constant.TaskActionGenerate
+	case 2:
+		info.Action = constant.TaskActionFirstTailGenerate
+	default:
+		return service.TaskErrorWrapperLocal(fmt.Errorf("hailuo video generation supports at most two images"), "invalid_images", http.StatusBadRequest)
+	}
+	return nil
 }
 
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
@@ -142,11 +160,118 @@ func (a *TaskAdaptor) GetChannelName() string {
 	return ChannelName
 }
 
+func collectImageInputs(req relaycommon.TaskSubmitReq) []string {
+	seen := make(map[string]bool)
+	images := make([]string, 0, len(req.Images)+2)
+	add := func(url string) {
+		url = strings.TrimSpace(url)
+		if url == "" || seen[url] {
+			return
+		}
+		seen[url] = true
+		images = append(images, url)
+	}
+	for _, image := range req.Images {
+		add(image)
+	}
+	add(req.Image)
+	add(req.InputReference)
+	return images
+}
+
+func parseTaskDuration(req *relaycommon.TaskSubmitReq) (int, error) {
+	if req.Duration > 0 {
+		return req.Duration, nil
+	}
+	if strings.TrimSpace(req.Seconds) != "" {
+		duration, err := strconv.Atoi(req.Seconds)
+		if err != nil {
+			return 0, fmt.Errorf("invalid seconds: %s", req.Seconds)
+		}
+		if duration > 0 {
+			return duration, nil
+		}
+	}
+	return DefaultDuration, nil
+}
+
+func validateHailuoPriceCombo(modelName, resolution string, duration int) (float64, bool, error) {
+	priceTable := map[string]map[string]map[int]float64{
+		"MiniMax-Hailuo-2.3-Fast": {
+			Resolution768P: {
+				6:  0.19,
+				10: 0.32,
+			},
+			Resolution1080P: {
+				6: 0.33,
+			},
+		},
+		"MiniMax-Hailuo-2.3": {
+			Resolution768P: {
+				6:  0.28,
+				10: 0.56,
+			},
+			Resolution1080P: {
+				6: 0.49,
+			},
+		},
+		"MiniMax-Hailuo-02": {
+			Resolution512P: {
+				6:  0.10,
+				10: 0.15,
+			},
+			Resolution768P: {
+				6:  0.28,
+				10: 0.56,
+			},
+			Resolution1080P: {
+				6: 0.49,
+			},
+		},
+	}
+
+	modelPrices, ok := priceTable[modelName]
+	if !ok {
+		return 1, false, nil
+	}
+	basePrice := modelPrices[Resolution768P][6]
+	if resolutionPrices, ok := modelPrices[resolution]; ok {
+		if actualPrice, ok := resolutionPrices[duration]; ok {
+			return actualPrice / basePrice, true, nil
+		}
+	}
+	return 0, true, fmt.Errorf("unsupported hailuo price combination: model=%s resolution=%s duration=%d", modelName, resolution, duration)
+}
+
+func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil
+	}
+	videoRequest, err := a.convertToRequestPayload(&req, info)
+	if err != nil {
+		return nil
+	}
+	duration := DefaultDuration
+	if videoRequest.Duration != nil {
+		duration = *videoRequest.Duration
+	}
+	resolution := videoRequest.Resolution
+
+	ratio, matched, err := validateHailuoPriceCombo(info.UpstreamModelName, resolution, duration)
+	if err != nil || !matched {
+		return nil
+	}
+	return map[string]float64{
+		fmt.Sprintf("hailuo-%s-%ds", resolution, duration): ratio,
+	}
+}
+
 func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, info *relaycommon.RelayInfo) (*VideoRequest, error) {
 	modelConfig := GetModelConfig(info.UpstreamModelName)
-	duration := DefaultDuration
-	if req.Duration > 0 {
-		duration = req.Duration
+	duration, err := parseTaskDuration(req)
+	if err != nil {
+		return nil, err
 	}
 	resolution := modelConfig.DefaultResolution
 	if req.Size != "" {
@@ -159,8 +284,25 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, in
 		Duration:   &duration,
 		Resolution: resolution,
 	}
+
+	images := collectImageInputs(*req)
+	if len(images) > 2 {
+		return nil, fmt.Errorf("hailuo video generation supports at most two images")
+	}
+	if len(images) >= 1 {
+		videoRequest.FirstFrameImage = images[0]
+	}
+	if len(images) == 2 {
+		videoRequest.LastFrameImage = images[1]
+	}
 	if err := req.UnmarshalMetadata(&videoRequest); err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata to video request failed")
+	}
+	if videoRequest.Duration == nil {
+		videoRequest.Duration = &duration
+	}
+	if _, _, err := validateHailuoPriceCombo(info.UpstreamModelName, videoRequest.Resolution, *videoRequest.Duration); err != nil {
+		return nil, err
 	}
 
 	return videoRequest, nil

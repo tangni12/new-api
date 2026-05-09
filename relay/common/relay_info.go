@@ -691,7 +691,9 @@ func (t *TaskSubmitReq) GetPrompt() string {
 }
 
 func (t *TaskSubmitReq) HasImage() bool {
-	return len(t.Images) > 0
+	return len(t.Images) > 0 ||
+		strings.TrimSpace(t.Image) != "" ||
+		strings.TrimSpace(t.InputReference) != ""
 }
 
 func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
