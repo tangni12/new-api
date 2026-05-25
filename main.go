@@ -2,13 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -204,9 +208,50 @@ func main() {
 	// Log startup success message
 	common.LogStartupSuccess(startTime, port)
 
-	err = server.Run(":" + port)
-	if err != nil {
-		common.FatalLog("failed to start HTTP server: " + err.Error())
+	// 优雅启动与关闭
+	httpServer := &http.Server{
+		Addr:    ":" + port,
+		Handler: server,
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	quit := make(chan os.Signal, 1)
+	// SIGINT (Ctrl+C)、SIGTERM (kill / 容器停止)、SIGHUP (终端断开 / 重启信号)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	select {
+	case err := <-serverErr:
+		if err != nil {
+			common.FatalLog("failed to start HTTP server: " + err.Error())
+		}
+	case sig := <-quit:
+		common.SysLog(fmt.Sprintf("received signal %s, shutting down gracefully...", sig))
+
+		shutdownTimeout := 500 * time.Second
+		if v := os.Getenv("SHUTDOWN_TIMEOUT"); v != "" {
+			if n, parseErr := strconv.Atoi(v); parseErr == nil && n > 0 {
+				shutdownTimeout = time.Duration(n) * time.Second
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		if err := httpServer.Shutdown(ctx); err != nil {
+			common.SysError(fmt.Sprintf("HTTP server shutdown error: %v", err))
+			if cErr := httpServer.Close(); cErr != nil {
+				common.SysError(fmt.Sprintf("HTTP server force close error: %v", cErr))
+			}
+		}
+
+		common.SysLog("server exited cleanly")
 	}
 }
 
