@@ -98,7 +98,7 @@ func (p *ModelBilling) klingPrice(req *vod.CreateAigcVideoTaskRequest) map[strin
 		case "1.6", "2.0", "2.1":
 			basePrice = 0.4
 			unitPrice = unitPriceByResolution(0.4, 0.7, 1.0, 1.5, resolution)
-		case "2.5-pro":
+		case "2.5", "2.5-pro":
 			basePrice = 0.3
 			unitPrice = unitPriceByResolution(0.3, 0.5, 0.75, 1.12, resolution)
 		case "2.6":
