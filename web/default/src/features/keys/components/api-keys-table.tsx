@@ -153,7 +153,6 @@ function ApiKeysMobileList({
                 <StatusBadge
                   label={t(statusConfig.label)}
                   variant={statusConfig.variant}
-                  showDot={statusConfig.showDot}
                   copyable={false}
                 />
               )}
@@ -318,6 +317,7 @@ export function ApiKeysTable() {
             columnId: 'status',
             title: t('Status'),
             options: API_KEY_STATUS_OPTIONS,
+            singleSelect: true,
           },
         ],
       }}

@@ -30,7 +30,6 @@ import {
   FileText,
   KeyRound,
   ListChecks,
-  Play,
   RadioTower,
   ShieldCheck,
   TerminalSquare,
@@ -52,10 +51,14 @@ import {
 } from '@/components/page-transition'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
-import { useApiInfo } from '../../hooks/use-status-data'
+import {
+  useApiInfo,
+  useDashboardContentVisibility,
+} from '../../hooks/use-status-data'
 import { AnnouncementsPanel } from './announcements-panel'
 import { ApiInfoPanel } from './api-info-panel'
 import { FAQPanel } from './faq-panel'
+import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
 
@@ -422,6 +425,12 @@ export function OverviewDashboard() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const { items: apiInfoItems } = useApiInfo()
+  const {
+    apiInfo: showApiInfoPanel,
+    announcements: showAnnouncementsPanel,
+    faq: showFAQPanel,
+    uptimeKuma: showUptimePanel,
+  } = useDashboardContentVisibility()
   const [manualSetupGuideExpanded, setManualSetupGuideExpanded] = useState<
     boolean | null
   >(() => getSavedSetupGuideExpanded())
@@ -495,10 +504,10 @@ export function OverviewDashboard() {
   const quickActions = useMemo<QuickAction[]>(
     () => [
       {
-        title: t('Playground'),
-        description: t('Test models and prompts from the browser'),
-        to: '/playground',
-        icon: Play,
+        title: t('API Keys'),
+        description: t('Create a key for your app or service'),
+        to: '/keys',
+        icon: KeyRound,
       },
       {
         title: t('Channels'),
@@ -573,6 +582,9 @@ export function OverviewDashboard() {
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length
   const setupGuideExpanded = manualSetupGuideExpanded ?? !setupComplete
+  const showLeftContentPanels =
+    isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
+  const showContentPanels = showLeftContentPanels || showUptimePanel
 
   const handleSetupGuideToggle = () => {
     const nextExpanded = !setupGuideExpanded
@@ -714,22 +726,52 @@ export function OverviewDashboard() {
 
       <SummaryCards />
 
-      <CardStaggerContainer className='grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-        <div className='grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2'>
-          <CardStaggerItem>
-            <ApiInfoPanel />
-          </CardStaggerItem>
-          <CardStaggerItem>
-            <AnnouncementsPanel />
-          </CardStaggerItem>
-          <CardStaggerItem>
-            <FAQPanel />
-          </CardStaggerItem>
-        </div>
-        <CardStaggerItem>
-          <UptimePanel />
-        </CardStaggerItem>
-      </CardStaggerContainer>
+      {showContentPanels && (
+        <CardStaggerContainer
+          className={cn(
+            'grid grid-cols-1 gap-4',
+            showLeftContentPanels &&
+              showUptimePanel &&
+              'xl:grid-cols-[minmax(0,1fr)_22rem]'
+          )}
+        >
+          {showLeftContentPanels && (
+            <div
+              className={cn(
+                'grid min-w-0 grid-cols-1 gap-4',
+                (showApiInfoPanel || showAnnouncementsPanel || showFAQPanel) &&
+                  'lg:grid-cols-2'
+              )}
+            >
+              {isAdmin && (
+                <CardStaggerItem className='lg:col-span-2'>
+                  <PerformanceHealthPanel />
+                </CardStaggerItem>
+              )}
+              {showApiInfoPanel && (
+                <CardStaggerItem>
+                  <ApiInfoPanel />
+                </CardStaggerItem>
+              )}
+              {showAnnouncementsPanel && (
+                <CardStaggerItem>
+                  <AnnouncementsPanel />
+                </CardStaggerItem>
+              )}
+              {showFAQPanel && (
+                <CardStaggerItem>
+                  <FAQPanel />
+                </CardStaggerItem>
+              )}
+            </div>
+          )}
+          {showUptimePanel && (
+            <CardStaggerItem>
+              <UptimePanel />
+            </CardStaggerItem>
+          )}
+        </CardStaggerContainer>
+      )}
     </div>
   )
 }
