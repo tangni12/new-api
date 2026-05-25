@@ -271,10 +271,7 @@ function renderBillingTag(record, t) {
 
 function renderModelName(record, copyText, t) {
   let other = getLogOther(record.other);
-  let modelMapped =
-    other?.is_model_mapped &&
-    other?.upstream_model_name &&
-    other?.upstream_model_name !== '';
+  let modelMapped = false;
   if (!modelMapped) {
     return renderModelTag(record.model_name, {
       onClick: (event) => {
