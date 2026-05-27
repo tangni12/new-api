@@ -134,6 +134,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       baseUrl: 'Default: https://api.replicate.com',
     },
   },
+  59: {
+    id: 59,
+    name: CHANNEL_TYPES[59],
+    icon: 'google',
+    defaultBaseUrl: 'https://api2img.shubiaobiao.com',
+    hints: {
+      baseUrl: 'Default: https://api2img.shubiaobiao.com',
+      key: 'Shubiao API key, sent as raw Authorization header',
+      models: 'veo-3.1-generate-001,veo-3.1-fast-generate-001',
+    },
+  },
 }
 
 /**

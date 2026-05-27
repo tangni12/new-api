@@ -194,6 +194,11 @@ export const CHANNEL_OPTIONS = [
     color: 'blue',
     label: 'TencentVod',
   },
+  {
+    value: 59,
+    color: 'blue',
+    label: 'ShubiaoVeo',
+  },
 ];
 
 // Channel types that support upstream model list fetching in UI.
