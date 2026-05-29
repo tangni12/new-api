@@ -14,7 +14,7 @@ type RequestPayload struct {
 	//ModelName string `json:"model_name"`
 	// 提示词
 	Prompt string `json:"prompt,omitempty"`
-	// 分辨率模式：720P、1080P、2K、4K
+	// 分辨率模式：720P、1080P、2K、4K 默认 720P
 	Mode string `json:"mode,omitempty"`
 	// 视频生成时长，单位：秒
 	Duration int `json:"duration,omitempty"`
@@ -24,7 +24,7 @@ type RequestPayload struct {
 
 	// 反向提示词
 	NegativePrompt string `json:"negative_prompt,omitempty"`
-	// 视频宽高比，可选值：16:9、9:16、1:1
+	// 视频宽高比，可选值：16:9、9:16、1:1 默认16:9
 	AspectRatio string `json:"aspect_ratio,omitempty"`
 	// 是否生成声音，可选值：true|false 默认false
 	SoundEnable bool `json:"sound_enable,omitempty"`
