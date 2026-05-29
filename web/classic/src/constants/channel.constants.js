@@ -192,7 +192,7 @@ export const CHANNEL_OPTIONS = [
   {
     value: 58,
     color: 'blue',
-    label: 'TencentVod',
+    label: 'TencentKling',
   },
   {
     value: 59,

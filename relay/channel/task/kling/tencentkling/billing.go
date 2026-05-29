@@ -1,4 +1,4 @@
-package tencentvod
+package tencentkling
 
 import (
 	"strings"

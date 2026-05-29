@@ -76,7 +76,7 @@ export const CHANNEL_TYPES = {
   55: 'Sora',
   56: 'Replicate',
   57: 'Codex',
-  58: 'TencentVod',
+  58: 'TencentKling',
   59: 'ShubiaoVeo',
 } as const
 

@@ -1,4 +1,4 @@
-package tencentvod
+package tencentkling
 
 import (
 	"bytes"
@@ -12,13 +12,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/channel/task/kling/klingcommon"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
-	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
+	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	tccommon "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -96,74 +97,102 @@ func (a *TaskAdaptor) buildCreateAigcVideoTaskRequest(req *relaycommon.TaskSubmi
 	if err != nil {
 		return nil, err
 	}
-	request.SubAppId = a.SubAppId
 
-	// 解析模型名称和版本
-	modelName, modelVersion := normalizeTencentVodModel(pickFirstNonEmpty(info.UpstreamModelName, info.OriginModelName))
-	request.ModelName = tccommon.StringPtr(modelName)
-	if modelVersion != "" {
+	// 解析和版本
+	if modelVersion, ok := ModelVersionMap[info.UpstreamModelName]; ok {
 		request.ModelVersion = tccommon.StringPtr(modelVersion)
+	} else {
+		return nil, errors.New("不支持的模型版本")
 	}
 
-	// 验证参数
-	switch modelName {
-	case string(ModelKling):
-		// 验证时长
-		if !slices.Contains([]float64{5, 10}, ptrValue(request.OutputConfig.Duration)) {
-			return nil, errors.New("kling时长只支持5秒和10秒")
-		}
-		// 验证分辨率
-		if req.Size != "" {
-			size := strings.ToUpper(req.Size)
-
-			if !slices.Contains(resolutionMap[ModelKling], size) {
-				return nil, errors.New("size格式不正确, 可选值为 720P、1080P、2K、4K")
-			}
-			request.OutputConfig.Resolution = tccommon.StringPtr(size)
-		} else {
-			request.OutputConfig.Resolution = tccommon.StringPtr("720P")
-		}
+	// 验证时长
+	if !slices.Contains([]float64{5, 10}, ptrValue(request.OutputConfig.Duration)) {
+		return nil, errors.New("kling时长只支持5秒和10秒")
 	}
+	// 验证分辨率
+	size := ptrValue(request.OutputConfig.Resolution)
+	if size != "" {
+		size = strings.ToUpper(size)
+
+		if !slices.Contains(resolutionMap[ModelKling], size) {
+			return nil, errors.New("size格式不正确, 可选值为 720P、1080P、2K、4K")
+		}
+		request.OutputConfig.Resolution = tccommon.StringPtr(size)
+	} else {
+		request.OutputConfig.Resolution = tccommon.StringPtr("720P")
+	}
+
+	request.SubAppId = a.SubAppId
+	// 模型名称
+	request.ModelName = tccommon.StringPtr(string(ModelKling))
 
 	return request, nil
 }
 
 func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*vod.CreateAigcVideoTaskRequest, error) {
-	r := vod.NewCreateAigcVideoTaskRequest()
-	r.Prompt = tccommon.StringPtr(req.Prompt)
+	payload := &klingcommon.RequestPayload{
+		//ModelName:      req.Model,
+		Prompt:         req.Prompt,
+		Mode:           taskcommon.DefaultString(req.Size, "720P"),
+		Duration:       req.Duration,
+		KlingType:      "text_to_video",
+		NegativePrompt: "",
+		AspectRatio:    "",
+		SoundEnable:    false,
+		TextToVideo:    klingcommon.TextToVideo{},
+		ImageToVideo: klingcommon.ImageToVideo{
+			Image:     req.Image,
+			ImageTail: "",
+		},
+	}
 
-	if req.HasImage() {
+	if err := taskcommon.UnmarshalMetadata(req.Metadata, payload); err != nil {
+		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+
+	r := vod.NewCreateAigcVideoTaskRequest()
+	r.Prompt = tccommon.StringPtr(payload.Prompt)
+
+	switch payload.KlingType {
+	case "text_to_video":
+
+	case "image_to_video":
 		r.FileInfos = append(r.FileInfos, &vod.AigcVideoTaskInputFileInfo{
 			Type:     tccommon.StringPtr("Url"),
 			Category: tccommon.StringPtr("Image"),
-			Url:      tccommon.StringPtr(req.Images[0]),
+			Url:      tccommon.StringPtr(payload.ImageToVideo.Image),
 			Usage:    tccommon.StringPtr("FirstFrame"),
 		})
 
 		// 首尾帧
-		if len(req.Images) > 1 {
-			r.LastFrameUrl = tccommon.StringPtr(req.Images[1])
+		if payload.ImageToVideo.ImageTail != "" {
+			r.LastFrameUrl = tccommon.StringPtr(payload.ImageToVideo.ImageTail)
 		}
 	}
 
-	duration := float64(req.Duration)
+	if payload.NegativePrompt != "" {
+		r.NegativePrompt = tccommon.StringPtr(payload.NegativePrompt)
+	}
+
+	duration := float64(payload.Duration)
+
+	AudioGeneration := "Disabled"
+	if payload.SoundEnable {
+		AudioGeneration = "Enabled"
+	}
+
 	r.OutputConfig = &vod.AigcVideoOutputConfig{
 		StorageMode: tccommon.StringPtr("Temporary"),
 		Duration:    &duration,
 
-		//Resolution:  "", // 分辨率
-		//AspectRatio: "", // 视频宽高比
+		Resolution:      tccommon.StringPtr(payload.Mode),    // 分辨率
+		AudioGeneration: tccommon.StringPtr(AudioGeneration), // 是否开启音频
 	}
 
-	delete(req.Metadata, "SubAppId")
-	delete(req.Metadata, "ModelName")
-	delete(req.Metadata, "ModelVersion")
-	delete(req.Metadata, "SessionId")
-	delete(req.Metadata, "SessionContext")
-
-	if err := taskcommon.UnmarshalMetadata(req.Metadata, r); err != nil {
-		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	if payload.AspectRatio != "" {
+		r.OutputConfig.AspectRatio = tccommon.StringPtr(payload.AspectRatio) // 视频宽高比
 	}
+
 	return r, nil
 }
 
@@ -180,21 +209,21 @@ func getVodRequest(c *gin.Context) (*vod.CreateAigcVideoTaskRequest, error) {
 }
 
 // BuildRequestURL constructs the upstream URL.
-func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
+func (a *TaskAdaptor) BuildRequestURL(_ *relaycommon.RelayInfo) (string, error) {
 	return "https://vod.tencentcloudapi.com", nil
 }
 
-func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info *relaycommon.RelayInfo) error {
+func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, _ *http.Request, _ *relaycommon.RelayInfo) error {
 	return nil
 }
 
 // BuildRequestBody 转换为腾讯vod参数
-func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
+func (a *TaskAdaptor) BuildRequestBody(_ *gin.Context, _ *relaycommon.RelayInfo) (io.Reader, error) {
 	return nil, nil
 }
 
 // DoRequest delegates to common helper.
-func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (*http.Response, error) {
+func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, _ io.Reader) (*http.Response, error) {
 	sdkRequest, err := getVodRequest(c)
 	if err != nil {
 		return nil, err
@@ -207,9 +236,6 @@ func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, req
 	if err != nil {
 		return nil, err
 	}
-
-	//sr, _ := json.Marshal(sdkRequest)
-	//fmt.Println(string(sr))
 
 	response, err := client.CreateAigcVideoTask(sdkRequest)
 	if err != nil {
@@ -298,28 +324,11 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 }
 
 func (a *TaskAdaptor) GetModelList() []string {
-	return []string{"Kling-1.6"}
+	return []string{""}
 }
 
 func (a *TaskAdaptor) GetChannelName() string {
 	return "TencentVod"
-}
-
-// ============================
-// helpers
-// ============================
-
-func (a *TaskAdaptor) getAspectRatio(size string) string {
-	switch size {
-	case "1024x1024", "512x512":
-		return "1:1"
-	case "1280x720", "1920x1080":
-		return "16:9"
-	case "720x1280", "1080x1920":
-		return "9:16"
-	default:
-		return "1:1"
-	}
 }
 
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
@@ -345,10 +354,14 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	case "PROCESSING":
 		taskInfo.Status = model.TaskStatusInProgress
 	case "FINISH":
-		taskInfo.Status = model.TaskStatusSuccess
-		if videos := aigcVideoTask.Output.FileInfos; len(videos) > 0 {
-			video := videos[0]
-			taskInfo.Url = *video.FileUrl
+		if ptrValue(aigcVideoTask.ErrCode) != 0 {
+			taskInfo.Status = model.TaskStatusFailure
+		} else {
+			taskInfo.Status = model.TaskStatusSuccess
+			if videos := aigcVideoTask.Output.FileInfos; len(videos) > 0 {
+				video := videos[0]
+				taskInfo.Url = *video.FileUrl
+			}
 		}
 	case "ABORTED":
 		taskInfo.Status = model.TaskStatusFailure
@@ -433,18 +446,6 @@ func (a *TaskAdaptor) newTencentVodClient(proxyURL string) (*vod.Client, error) 
 //	return fileInfo, nil
 //}
 
-func assignTencentVodFile(request *vod.CreateAigcVideoTaskRequest, source string) {
-	value := strings.TrimSpace(source)
-	if value == "" {
-		return
-	}
-	if isHTTPURL(value) {
-		request.LastFrameUrl = &value
-		return
-	}
-	request.LastFrameFileId = &value
-}
-
 func buildTencentVodHTTPResponse(statusCode int, payload any) (*http.Response, error) {
 	body, err := common.Marshal(payload)
 	if err != nil {
@@ -490,26 +491,6 @@ func pickFirstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func firstNonEmpty(values ...string) string {
-	return pickFirstNonEmpty(values...)
-}
-
-func firstNonNilString(values ...*string) *string {
-	for _, value := range values {
-		if value != nil && strings.TrimSpace(*value) != "" {
-			return value
-		}
-	}
-	return nil
-}
-
-func int64Value(value *int64) int64 {
-	if value == nil {
-		return 0
-	}
-	return *value
 }
 
 func isHTTPURL(value string) bool {
