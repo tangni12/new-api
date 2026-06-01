@@ -148,13 +148,28 @@ const renderPlatform = (platform, t) => {
     (opt) => String(opt.value) === String(platform),
   );
   if (option) {
+    let label = option.label;
+    if (label === 'ShubiaoVeo') {
+      label = 'Google Gemini';
+    } else if (label === 'TencentKling') {
+      label = '可灵';
+    } else if (label === 'AliVidu') {
+      label = 'Vidu';
+    }
     return (
       <Tag color={option.color} shape='circle'>
-        {option.label}
+        {label}
       </Tag>
     );
   }
   switch (platform) {
+    case 'ShubiaoVeo':
+    case 'shubiaoveo':
+      return (
+          <Tag color='blue' shape='circle'>
+            Google Gemini
+          </Tag>
+      );
     case 'suno':
       return (
         <Tag color='green' shape='circle'>
