@@ -191,13 +191,18 @@ export const CHANNEL_OPTIONS = [
   },
   {
     value: 58,
-    color: 'blue',
-    label: 'TencentKling',
+    color: 'green',
+    label: '可灵',
   },
   {
     value: 59,
     color: 'blue',
-    label: 'ShubiaoVeo',
+    label: 'Google Gemini',
+  },
+  {
+    value: 60,
+    color: 'purple',
+    label: 'Vidu',
   },
 ];
 

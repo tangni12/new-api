@@ -103,6 +103,7 @@ export function getChannelTypeIcon(type: number): string {
     56: 'Replicate', // Replicate
     58: 'TencentCloud', // TencentVod
     59: 'Gemini', // ShubiaoVeo
+    60: 'Qwen', // AliVidu (Vidu on Alibaba Bailian)
 
     // Tools & Platforms
     37: 'Dify', // Dify

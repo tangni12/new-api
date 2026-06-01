@@ -261,68 +261,68 @@ func firstImageInput(req relaycommon.TaskSubmitReq) string {
 func ProcessAliOtherRatios(aliReq *AliVideoRequest) (map[string]float64, error) {
 	otherRatios := make(map[string]float64)
 	aliRatios := map[string]map[string]float64{
-		// vidu文生视频
-		"vidu/viduq3-pro_text2video": {
-			"540P":  0.4,
-			"720P":  1,
-			"1080P": 1.2,
-		},
-		"vidu/viduq3-turbo_text2video": {
-			"540P":  0.666667,
-			"720P":  1,
-			"1080P": 1.166667,
-		},
-		"vidu/viduq2_text2video": {
-			"540P":  0.514286,
-			"720P":  1,
-			"1080P": 1.714286,
-		},
-		// vidu图生视频
-		"vidu/viduq3-pro_img2video": {
-			"540P":  0.4,
-			"720P":  1,
-			"1080P": 1.2,
-		},
-		"vidu/viduq3-turbo_img2video": {
-			"540P":  0.666667,
-			"720P":  1,
-			"1080P": 1.166667,
-		},
-		"vidu/viduq2-pro_img2video": {
-			"540P":  0.454545,
-			"720P":  1,
-			"1080P": 2.090909,
-		},
-		"vidu/viduq2-turbo_img2video": {
-			"540P":  0.35,
-			"720P":  1,
-			"1080P": 1.875,
-		},
-		"vidu/viduq2-pro-fast_img2video": {
-			"720P":  1,
-			"1080P": 2,
-		},
-		// vidu first-last-frame video
-		"vidu/viduq3-pro_start-end2video": {
-			"540P":  0.4,
-			"720P":  1,
-			"1080P": 1.2,
-		},
-		"vidu/viduq3-turbo_start-end2video": {
-			"540P":  0.666667,
-			"720P":  1,
-			"1080P": 1.166667,
-		},
-		"vidu/viduq2-pro_start-end2video": {
-			"540P":  0.454545,
-			"720P":  1,
-			"1080P": 2.090909,
-		},
-		"vidu/viduq2-turbo_start-end2video": {
-			"540P":  0.35,
-			"720P":  1,
-			"1080P": 1.875,
-		},
+		//// vidu文生视频
+		//"vidu/viduq3-pro_text2video": {
+		//	"540P":  0.4,
+		//	"720P":  1,
+		//	"1080P": 1.2,
+		//},
+		//"vidu/viduq3-turbo_text2video": {
+		//	"540P":  0.666667,
+		//	"720P":  1,
+		//	"1080P": 1.166667,
+		//},
+		//"vidu/viduq2_text2video": {
+		//	"540P":  0.514286,
+		//	"720P":  1,
+		//	"1080P": 1.714286,
+		//},
+		//// vidu图生视频
+		//"vidu/viduq3-pro_img2video": {
+		//	"540P":  0.4,
+		//	"720P":  1,
+		//	"1080P": 1.2,
+		//},
+		//"vidu/viduq3-turbo_img2video": {
+		//	"540P":  0.666667,
+		//	"720P":  1,
+		//	"1080P": 1.166667,
+		//},
+		//"vidu/viduq2-pro_img2video": {
+		//	"540P":  0.454545,
+		//	"720P":  1,
+		//	"1080P": 2.090909,
+		//},
+		//"vidu/viduq2-turbo_img2video": {
+		//	"540P":  0.35,
+		//	"720P":  1,
+		//	"1080P": 1.875,
+		//},
+		//"vidu/viduq2-pro-fast_img2video": {
+		//	"720P":  1,
+		//	"1080P": 2,
+		//},
+		//// vidu first-last-frame video
+		//"vidu/viduq3-pro_start-end2video": {
+		//	"540P":  0.4,
+		//	"720P":  1,
+		//	"1080P": 1.2,
+		//},
+		//"vidu/viduq3-turbo_start-end2video": {
+		//	"540P":  0.666667,
+		//	"720P":  1,
+		//	"1080P": 1.166667,
+		//},
+		//"vidu/viduq2-pro_start-end2video": {
+		//	"540P":  0.454545,
+		//	"720P":  1,
+		//	"1080P": 2.090909,
+		//},
+		//"vidu/viduq2-turbo_start-end2video": {
+		//	"540P":  0.35,
+		//	"720P":  1,
+		//	"1080P": 1.875,
+		//},
 		// 万相模型
 		"wan2.7-t2v": {
 			"720P":  1,

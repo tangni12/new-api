@@ -57,6 +57,7 @@ const (
 	ChannelTypeCodex          = 57
 	ChannelTypeTencentKling   = 58
 	ChannelTypeShubiaoVeo     = 59
+	ChannelTypeAliVidu        = 60
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -122,6 +123,7 @@ var ChannelBaseURLs = []string{
 	"https://chatgpt.com",                       //57
 	"",                                          //58
 	"https://api2img.shubiaobiao.com",           //59
+	"https://dashscope.aliyuncs.com",            //60
 }
 
 var ChannelTypeNames = map[int]string{
@@ -181,6 +183,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeCodex:          "Codex",
 	ChannelTypeTencentKling:   "TencentKling",
 	ChannelTypeShubiaoVeo:     "ShubiaoVeo",
+	ChannelTypeAliVidu:        "AliVidu",
 }
 
 func GetChannelTypeName(channelType int) string {

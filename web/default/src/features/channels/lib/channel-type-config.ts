@@ -145,6 +145,17 @@ export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
       models: 'veo-3.1-generate-001,veo-3.1-fast-generate-001',
     },
   },
+  60: {
+    id: 60,
+    name: CHANNEL_TYPES[60],
+    icon: 'qwen',
+    defaultBaseUrl: 'https://dashscope.aliyuncs.com',
+    hints: {
+      baseUrl: 'Default: https://dashscope.aliyuncs.com',
+      key: 'Alibaba Bailian (DashScope) API Key, format: sk-xxxx',
+      models: 'viduq3-pro,viduq3-turbo,viduq2,viduq2-pro,viduq2-turbo,viduq2-pro-fast',
+    },
+  },
 }
 
 /**
