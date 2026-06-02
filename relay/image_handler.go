@@ -133,6 +133,14 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		}
 	}
 
+	// displayImageN 仅用于日志展示「生成数量」。优先取实际参与计费的 n
+	// （适配器可能已根据上游实际返回的张数设置 OtherRatios["n"]，如组图场景），
+	// 否则回退到请求中的 n。该值不参与任何实际计费计算。
+	displayImageN := imageN
+	if actualN, ok := info.PriceData.OtherRatios["n"]; ok && actualN > 0 {
+		displayImageN = uint(actualN)
+	}
+
 	if usage.(*dto.Usage).TotalTokens == 0 {
 		usage.(*dto.Usage).TotalTokens = 1
 	}
@@ -153,8 +161,8 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if len(quality) > 0 {
 		logContent = append(logContent, fmt.Sprintf("品质 %s", quality))
 	}
-	if imageN > 0 {
-		logContent = append(logContent, fmt.Sprintf("生成数量 %d", imageN))
+	if displayImageN > 0 {
+		logContent = append(logContent, fmt.Sprintf("生成数量 %d", displayImageN))
 	}
 
 	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), logContent)

@@ -35,6 +35,12 @@ type ImageRequest struct {
 	WatermarkEnabled json.RawMessage `json:"watermark_enabled,omitempty"`
 	UserId           json.RawMessage `json:"user_id,omitempty"`
 	Image            json.RawMessage `json:"image,omitempty"`
+	// volcengine seedream 图片生成专用参数（仅在请求显式传入时才会透传给上游，
+	// 不传时因 omitempty 不会出现在序列化结果中，对其他渠道无任何影响）
+	SequentialImageGeneration        json.RawMessage `json:"sequential_image_generation,omitempty"`
+	SequentialImageGenerationOptions json.RawMessage `json:"sequential_image_generation_options,omitempty"`
+	GuidanceScale                    json.RawMessage `json:"guidance_scale,omitempty"`
+	OptimizePromptOptions            json.RawMessage `json:"optimize_prompt_options,omitempty"`
 	// 用匿名参数接收额外参数
 	Extra map[string]json.RawMessage `json:"-"`
 }

@@ -389,8 +389,45 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 	}
 
 	adaptor := openai.Adaptor{}
+	if info.RelayMode == constant.RelayModeImagesGenerations {
+		// 火山方舟图片生成（如 seedream 系列）按上游实际返回的生成张数计费。
+		// 仅在此分支处理，隔离于 volcengine 渠道的图片模式，不影响其他渠道/模式。
+		a.applyImageGeneratedCountBilling(resp, info)
+	}
 	usage, err = adaptor.DoResponse(c, resp, info)
 	return
+}
+
+// applyImageGeneratedCountBilling 针对火山方舟图片生成，按上游响应中的
+// usage.generated_images（实际成功生成的图片张数）覆盖计费张数 n。
+func (a *Adaptor) applyImageGeneratedCountBilling(resp *http.Response, info *relaycommon.RelayInfo) {
+	if resp == nil || resp.Body == nil || info == nil {
+		return
+	}
+	if !info.PriceData.UsePrice {
+		return
+	}
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	// 重建 body，供后续 openai handler 读取与原样透传
+	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	if len(bodyBytes) == 0 {
+		return
+	}
+
+	var parsed struct {
+		Usage struct {
+			GeneratedImages int `json:"generated_images"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		return
+	}
+	if parsed.Usage.GeneratedImages > 0 {
+		info.PriceData.AddOtherRatio("n", float64(parsed.Usage.GeneratedImages))
+	}
 }
 
 func (a *Adaptor) GetModelList() []string {
