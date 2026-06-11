@@ -57,6 +57,7 @@ import {
   getModelCategories,
   selectFilter,
 } from '../../../../helpers';
+import { getQuotaPerUnit } from '../../../../helpers/quota';
 import ModelSelectModal from './ModelSelectModal';
 import SingleModelSelectModal from './SingleModelSelectModal';
 import OllamaModelModal from './OllamaModelModal';
@@ -189,6 +190,9 @@ const EditChannelModal = (props) => {
     priority: 0,
     weight: 0,
     tag: '',
+    quota_limit_enabled: false,
+    quota_limit: 0,
+    quota_limit_amount: 0,
     multi_key_mode: 'random',
     // 渠道额外设置的默认值
     force_format: false,
@@ -846,6 +850,9 @@ const EditChannelModal = (props) => {
           2,
         );
       }
+      data.quota_limit_enabled = data.quota_limit_enabled === true;
+      data.quota_limit = Number(data.quota_limit) || 0;
+      data.quota_limit_amount = data.quota_limit / getQuotaPerUnit();
       const chInfo = data.channel_info || {};
       const isMulti = chInfo.is_multi_key === true;
       setIsMultiKeyChannel(isMulti);
@@ -1748,6 +1755,13 @@ const EditChannelModal = (props) => {
       localInputs.other = 'v2.1';
     }
 
+    const quotaLimitAmount = Number(localInputs.quota_limit_amount || 0);
+    localInputs.quota_limit_enabled =
+      localInputs.quota_limit_enabled === true && quotaLimitAmount > 0;
+    localInputs.quota_limit = localInputs.quota_limit_enabled
+      ? Math.round(quotaLimitAmount * getQuotaPerUnit())
+      : 0;
+
     // 生成渠道额外设置JSON
     const channelExtraSettings = {
       force_format: localInputs.force_format || false,
@@ -1855,6 +1869,7 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    delete localInputs.quota_limit_amount;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -3652,6 +3667,28 @@ const EditChannelModal = (props) => {
                       '仅当自动禁用开启时有效，关闭后不会自动禁用该渠道',
                     )}
                     initValue={autoBan}
+                  />
+
+                  <Form.Switch
+                    field='quota_limit_enabled'
+                    label={t('开启渠道限额')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    extraText={t(
+                      '开启后，当渠道累计已用额度达到限额时会自动禁用该渠道',
+                    )}
+                  />
+
+                  <Form.InputNumber
+                    field='quota_limit_amount'
+                    label={t('渠道限额（USD）')}
+                    min={0}
+                    precision={4}
+                    step={1}
+                    placeholder={t('不填写或为 0 表示不限制')}
+                    extraText={t(
+                      '按渠道累计已用额度判断，内部会自动换算为系统额度',
+                    )}
                   />
 
                   {/* Test Model - Core Config */}

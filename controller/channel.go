@@ -392,6 +392,7 @@ func GetChannel(c *gin.Context) {
 	}
 	if channel != nil {
 		clearChannelInfo(channel)
+		model.ApplyChannelQuotaLimit(channel)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -856,8 +857,10 @@ func DeleteChannelBatch(c *gin.Context) {
 
 type PatchChannel struct {
 	model.Channel
-	MultiKeyMode *string `json:"multi_key_mode"`
-	KeyMode      *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
+	QuotaLimitEnabledInput *bool   `json:"quota_limit_enabled"`
+	QuotaLimitInput        *int64  `json:"quota_limit"`
+	MultiKeyMode           *string `json:"multi_key_mode"`
+	KeyMode                *string `json:"key_mode"` // 多key模式下密钥覆盖或者追加
 }
 
 func UpdateChannel(c *gin.Context) {
@@ -979,10 +982,15 @@ func UpdateChannel(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err = model.PatchChannelQuotaLimit(channel.Id, channel.QuotaLimitEnabledInput, channel.QuotaLimitInput); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	model.InitChannelCache()
 	service.ResetProxyClientCache()
 	channel.Key = ""
 	clearChannelInfo(&channel.Channel)
+	model.ApplyChannelQuotaLimit(&channel.Channel)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
