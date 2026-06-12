@@ -90,6 +90,12 @@ function getGroupRatioText(other: LogOtherData | null): string | null {
   return null
 }
 
+function splitQuotaDisplay(value: string): { prefix: string; amount: string } {
+  const match = value.match(/^([^0-9+\-.,\s]+)(.+)$/)
+  if (!match) return { prefix: '', amount: value }
+  return { prefix: match[1], amount: match[2] }
+}
+
 function buildDetailSegments(
   log: UsageLog,
   other: LogOtherData | null,
@@ -268,8 +274,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const config = getLogTypeConfig(log.type)
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs tabular-nums'>
+          <div className='flex min-w-0 flex-col gap-0.5'>
+            <span className='truncate font-mono text-xs tabular-nums'>
               {formatTimestampToDate(timestamp)}
             </span>
             <StatusBadge
@@ -277,6 +283,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               variant={config.color as StatusBadgeProps['variant']}
               size='sm'
               copyable={false}
+              className='!text-xs [&_span]:!text-xs'
             />
           </div>
         )
@@ -287,6 +294,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         return value.includes(String(row.original.type))
       },
       enableHiding: false,
+      size: 180,
       meta: { label: t('Time') },
     },
   ]
@@ -295,6 +303,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     columns.push(
       {
         id: 'channel',
+        accessorFn: (row) => row.channel,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t('Channel')} />
         ),
@@ -332,6 +341,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                       autoColor={String(log.channel)}
                       copyText={String(log.channel)}
                       size='sm'
+                      showDot={false}
                       className='font-mono'
                     />
                     {affinity && (
@@ -357,7 +367,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     )}
                   </div>
                   {log.channel_name && (
-                    <span className='text-muted-foreground/70 truncate text-[11px]'>
+                    <span className='text-muted-foreground/70 truncate [font-family:var(--font-body)] !text-xs'>
                       {channelName}
                     </span>
                   )}
@@ -394,10 +404,11 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </TooltipProvider>
           )
         },
-        meta: { label: t('Channel'), mobileHidden: true },
+        meta: { label: t('Channel') },
       },
       {
         id: 'user',
+        accessorFn: (row) => row.username,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title={t('User')} />
         ),
@@ -418,7 +429,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 setUserInfoDialogOpen(true)
               }}
             >
-              <Avatar className='ring-border/60 size-6 ring-1'>
+              <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
                 <AvatarFallback
                   className={cn(
                     'text-[11px] font-semibold',
@@ -450,7 +461,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </button>
           )
         },
-        meta: { label: t('User'), mobileHidden: true },
+        meta: { label: t('User') },
       }
     )
   }
@@ -490,7 +501,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                   icon={KeyRound}
                   copyText={sensitiveVisible ? tokenName : undefined}
                   size='sm'
-                  className='border-border/60 bg-muted/30 text-foreground max-w-full overflow-hidden rounded-md border px-1.5 py-0.5 font-mono'
+                  showDot={false}
+                  className='border-border/60 bg-muted/30 text-foreground h-6 max-w-full gap-1.5 overflow-hidden rounded-md border px-2 py-0.5 [font-family:var(--font-body)]'
                 />
               </TooltipTrigger>
               {sensitiveVisible && tokenName.length > 16 && (
@@ -501,7 +513,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </Tooltip>
           </TooltipProvider>
           {metaParts.length > 0 && (
-            <span className='text-muted-foreground/60 truncate text-[11px]'>
+            <span className='text-muted-foreground/60 truncate [font-family:var(--font-body)] !text-xs'>
               {metaParts.join(' · ')}
             </span>
           )}
@@ -525,7 +537,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const modelInfo = formatModelName(log)
 
         return (
-          <div className='flex max-w-[220px] flex-col gap-0.5'>
+          <div className='flex w-fit flex-col gap-0.5'>
             <ModelBadge
               modelName={modelInfo.name}
               actualModel={modelInfo.actualModel}
@@ -553,7 +565,20 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             ? log.completion_tokens / useTime
             : null
         const timeVariant = getResponseTimeColor(useTime, log.completion_tokens)
-        const frtVariant = frt ? getFirstResponseTimeColor(frt / 1000) : null
+        const frtVariant = frt
+          ? getFirstResponseTimeColor(frt / 1000)
+          : 'neutral'
+
+        const timingBgMap: Record<string, string> = {
+          success:
+            'border border-emerald-200/40 bg-emerald-50/35 dark:border-emerald-900/40 dark:bg-emerald-950/15',
+          warning:
+            'border border-amber-200/45 bg-amber-50/35 dark:border-amber-900/40 dark:bg-amber-950/15',
+          danger:
+            'border border-rose-200/50 bg-rose-50/35 dark:border-rose-900/40 dark:bg-rose-950/15',
+          neutral:
+            'border border-border/60 bg-muted/30 dark:border-border/40 dark:bg-muted/20',
+        }
 
         return (
           <div className='flex flex-col gap-1'>
@@ -563,7 +588,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 variant={timeVariant as StatusBadgeProps['variant']}
                 size='sm'
                 copyable={false}
-                className='font-mono'
+                className={cn('rounded-md font-mono', timingBgMap[timeVariant])}
               />
               {log.is_stream &&
                 (frt != null && frt > 0 ? (
@@ -571,25 +596,31 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     label={formatUseTime(frt / 1000)}
                     variant={frtVariant as StatusBadgeProps['variant']}
                     size='sm'
+                    showDot={false}
                     copyable={false}
-                    className='font-mono'
+                    className={cn(
+                      'rounded-md font-mono',
+                      timingBgMap[frtVariant]
+                    )}
                   />
                 ) : (
                   <StatusBadge
                     label='N/A'
                     variant='neutral'
                     size='sm'
+                    showDot={false}
                     copyable={false}
+                    className={cn('rounded-md font-mono', timingBgMap.neutral)}
                   />
                 ))}
             </div>
-            <div className='flex items-center gap-1 text-[11px]'>
-              <span className='text-muted-foreground/60'>
+            <div className='flex items-center gap-1 [font-family:var(--font-body)] !text-xs leading-none'>
+              <span className='text-muted-foreground/60 [font-family:var(--font-body)] !text-xs leading-none'>
                 {log.is_stream ? t('Stream') : t('Non-stream')}
                 {tokensPerSecond != null && (
                   <>
                     {' · '}
-                    <span className='font-mono tabular-nums'>
+                    <span className='tabular-nums'>
                       {Math.round(tokensPerSecond)}
                     </span>
                     {' t/s'}
@@ -625,7 +656,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           </div>
         )
       },
-      meta: { label: t('Timing'), mobileHidden: true },
+      meta: { label: t('Timing') },
     },
 
     {
@@ -676,7 +707,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           </div>
         )
       },
-      meta: { label: 'Tokens', mobileHidden: true },
+      meta: { label: 'Tokens' },
     },
 
     {
@@ -718,11 +749,15 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         }
 
         const quotaStr = formatLogQuota(quota)
+        const quotaDisplay = splitQuotaDisplay(quotaStr)
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='border-border/80 bg-muted/60 inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
-              {quotaStr}
+            <span className='border-border/80 bg-muted/60 inline-flex h-6 w-fit items-center rounded-md border px-2 [font-family:var(--font-body)] text-sm leading-none font-semibold tabular-nums'>
+              {quotaDisplay.prefix && (
+                <span className='mr-1'>{quotaDisplay.prefix}</span>
+              )}
+              <span>{quotaDisplay.amount}</span>
             </span>
           </div>
         )
